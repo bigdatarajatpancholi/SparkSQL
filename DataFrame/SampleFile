@@ -1,0 +1,44 @@
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
+
+val input = sc.textFile("file:///home/azimukangda5500/Project-2/spark/SOURCE1/PROD4.ACCT_ACCOUNTS.schema")
+
+val input2 = input.map{ x=>
+val w = x.split(":")
+val columnName= w(0).trim()
+val raw = w(1).trim()
+(columnName,raw)
+}
+
+val input3 = input2.map { x=>
+val x2=x._2.replaceAll(";","")
+(x._1,x2)
+}
+
+val input4 = input3.map (x=> x._1)
+
+val input5 = input4.collect().toList
+
+val input6 = StructType(input5.map(fieldName => StructField(fieldName, StringType, true)))
+
+
+val dataDF=spark.read.format("csv")
+.schema(input6)
+.option("delimiter", "\u0007")
+.option("ignoreLeadingWhiteSpace","True")
+.option("ignoreTrailingWhiteSpace","True")
+.option("multiline","True")
+.option("escape", "\u000D")
+.load("file:///home/azimukangda5500/Project-2/spark/SOURCE1/pump_PROD4_ACCT_ACCOUNTS_2018-10-23_08-31-38_00000_data.dsv.gz")
+
+val dataDF_CSV = dataDF.csv()
+
+dataDF_CSV.printSchema()
+
+dataDF_CSV.show()
+
+dataDF_CSV.createOrReplaceTempView("survey_tbl")
+
+spark.sql("""select * from survey_tbl""").show 
+
+dataDF_CSV.write.format("parquet").mode("overwrite").save("file:///home/azimukangda5500/Project-2/spark/SOURCE1/output/") 
