@@ -21,7 +21,7 @@ val input5 = input4.collect().toList
 
 val input6 = StructType(input5.map(fieldName => StructField(fieldName, StringType, true)))
 
-
+// paste this in :paste mode and exit with ctrl+d
 val dataDF=spark.read.format("csv")
 .schema(input6)
 .option("delimiter", "\u0007")
@@ -31,14 +31,20 @@ val dataDF=spark.read.format("csv")
 .option("escape", "\u000D")
 .load("file:///home/azimukangda5500/Project-2/spark/SOURCE1/pump_PROD4_ACCT_ACCOUNTS_2018-10-23_08-31-38_00000_data.dsv.gz")
 
-val dataDF_CSV = dataDF.csv()
+dataDF.printSchema()
 
-dataDF_CSV.printSchema()
+dataDF.show()
 
-dataDF_CSV.show()
-
-dataDF_CSV.createOrReplaceTempView("survey_tbl")
+dataDF.createOrReplaceTempView("survey_tbl")
 
 spark.sql("""select * from survey_tbl""").show 
 
-dataDF_CSV.write.format("parquet").mode("overwrite").save("file:///home/azimukangda5500/Project-2/spark/SOURCE1/output/") 
+dataDF.write.format("parquet").mode("overwrite").save("file:///home/azimukangda5500/Project-2/spark/SOURCE1/output/") 
+
+--
+Reading parquet file:-
+val ParquetDF=spark.read.format("parquet")
+.load("file:///home/azimukangda5500/Project-2/spark/SOURCE1/output/part-00000-bc81534d-be66-44a3-95ef-6756e12d219f-c000.snappy.parquet")
+
+ParquetDF.printSchema()
+ParquetDF.show()
