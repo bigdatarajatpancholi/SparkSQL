@@ -51,7 +51,7 @@ val db_policy_hub_orig_md5_df = db_policy_hub_df.select($"policyid",$"policynumb
 val scd2_df = db_policy_hub_orig_md5_df.as("df1").join(db_policy_hub_delta_md5_df.as("df2"), $"df1.policyid" === $"df2.policyid", "full_outer").select($"df1.policyid",$"df2.policyid",$"df2.policynumber",$"df2.billingmethod",$"df2.segment",$"df2.basestate",$"df2.assignedrisk",$"df2.termnumber",$"df2.periodstart",$"df2.periodend",$"df2.packagerisk",$"df2.originaleffectivedate",$"df2.issuedate",$"df2.losshistorytype_name",$"df1.orig_non_key_md5",$"df2.delta_non_key_md5").withColumn("md5Flag", when (($"df1.policyid" === $"df2.policyid") && ($"df1.orig_non_key_md5" === $"df2.delta_non_key_md5"), lit("NCR")).when (($"df1.policyid".isNotNull) && ($"df2.delta_non_key_md5".isNull), lit("NCR")).when (($"df1.policyid" === $"df2.policyid") && ($"df1.orig_non_key_md5" =!= $"df2.delta_non_key_md5"), lit("U")).when (($"df1.policyid".isNull) && ($"df2.delta_non_key_md5".isNotNull), lit("I"))).drop($"df1.policyid")
 
 
-val resultDF = scd2_df.filter($"md5Flag" === "I" && $"md5Flag" === "U").withColumn("eff_start_date", current_timestamp()).withColumn("eff_end_date", lit("9999-01-01 00:00:00")).withColumn("curr_ind", lit("Y")).withColumn("md5_chk_sum",lit("MD1")).drop("md5Flag","orig_non_key_md5","delta_non_key_md5")
+val resultDF = scd2_df.filter($"md5Flag" === "I" || $"md5Flag" === "U").withColumn("eff_start_date", current_timestamp()).withColumn("eff_end_date", lit("9999-01-01 00:00:00")).withColumn("curr_ind", lit("Y")).withColumn("md5_chk_sum",lit("MD1")).drop("md5Flag","orig_non_key_md5","delta_non_key_md5")
 
 resultDF.write.mode("append").partitionBy("eff_start_date").saveAsTable("db10.db_policy_hub")
 
