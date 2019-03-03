@@ -1,0 +1,63 @@
+import org.apache.spark.sql.SparkSession
+
+import spark.implicits._
+
+val spark = SparkSession
+    .builder()
+    .appName("Spark Hive Usecase")
+    .master("local[*]")
+    .enableHiveSupport()
+    .config("spark.sql.warehouse.dir", "/tmp")
+    .config("hive.exec.dynamic.partition", "true")
+    .config("hive.exec.dynamic.partition.mode", "nonstrict")
+	.config("spark.debug.maxToStringFields", 100)
+    .getOrCreate()
+	
+--spark.sql("select * from team_a.pc_policyperiod_orig").show()
+--spark.sql("select * from team_a.pc_policyperiod_orig").printSchema
+/*
+spark.table("team_a.pc_policyperiod_orig").select($"id",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend").printSchema
+*/
+
+val orig_table = spark.table("team_a.pc_policyperiod_orig").select($"policyid",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend")
+
+--orig_table.count() -> 1666
+
+val pc_policy = spark.table("pc_policy").select($"id",$"packagerisk",$"originaleffectivedate",$"issuedate",$"losshistorytype")
+
+--pc_policy.count() -> 803
+
+val pctl_losshistorytype = spark.table("pctl_losshistorytype").select($"id",$"name".as("losshistorytype_name"))
+
+--pctl_losshistorytype.count() -> 3
+
+val db_policy_hub_df = orig_table.as("df1").join(pc_policy.as("df2"), $"df1.policyid" === $"df2.id").join(pctl_losshistorytype.as("df3"), $"df2.losshistorytype" === $"df3.id").select($"df1.policyid",$"df1.policynumber",$"df1.billingmethod",$"df1.segment",$"df1.basestate",$"df1.assignedrisk",$"df1.termnumber",$"df1.periodstart",$"df1.periodend",$"df2.packagerisk",$"df2.originaleffectivedate",$"df2.issuedate",$"df3.losshistorytype_name").withColumn("eff_start_date", current_timestamp()).withColumn("eff_end_date", lit("9999-01-01 00:00:00")).withColumn("curr_ind", lit("Y")).withColumn("md5_chk_sum",lit("MD1"))
+
+--db_policy_hub_df.show(false)
+
+db_policy_hub_df.write.partitionBy("eff_start_date").saveAsTable("db10.db_policy_hub")
+
+--delta changes
+
+val delta_table = spark.table("team_a.pc_policyperiod_delta").select($"policyid",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend")
+
+val db_policy_hub_delta_md5_df = delta_table.as("df1").join(pc_policy.as("df2"), $"df1.policyid" === $"df2.id").join(pctl_losshistorytype.as("df3"), $"df2.losshistorytype" === $"df3.id").select($"df1.policyid",$"df1.policynumber",$"df1.billingmethod",$"df1.segment",$"df1.basestate",$"df1.assignedrisk",$"df1.termnumber",$"df1.periodstart",$"df1.periodend",$"df2.packagerisk",$"df2.originaleffectivedate",$"df2.issuedate",$"df3.losshistorytype_name").withColumn("delta_non_key_concat",concat_ws("_",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend",$"packagerisk",$"originaleffectivedate",$"issuedate",$"losshistorytype_name")).withColumn("delta_non_key_md5",md5($"delta_non_key_concat")).drop($"delta_non_key_concat")
+
+--val samp = db_policy_hub_delta_md5_df.withColumn("delta_non_key_md5",md5($"delta_non_key_concat"))
+
+val db_policy_hub_orig_md5_df = db_policy_hub_df.select($"policyid",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend",$"packagerisk",$"originaleffectivedate",$"issuedate",$"losshistorytype_name").withColumn("orig_non_key_concat",concat_ws("_",$"policynumber",$"billingmethod",$"segment",$"basestate",$"assignedrisk",$"termnumber",$"periodstart",$"periodend",$"packagerisk",$"originaleffectivedate",$"issuedate",$"losshistorytype_name")).withColumn("orig_non_key_md5", md5($"orig_non_key_concat")).drop($"orig_non_key_concat")
+
+
+val scd2_df = db_policy_hub_orig_md5_df.as("df1").join(db_policy_hub_delta_md5_df.as("df2"), $"df1.policyid" === $"df2.policyid", "full_outer").select($"df1.policyid",$"df2.policyid",$"df2.policynumber",$"df2.billingmethod",$"df2.segment",$"df2.basestate",$"df2.assignedrisk",$"df2.termnumber",$"df2.periodstart",$"df2.periodend",$"df2.packagerisk",$"df2.originaleffectivedate",$"df2.issuedate",$"df2.losshistorytype_name",$"df1.orig_non_key_md5",$"df2.delta_non_key_md5").withColumn("md5Flag", when (($"df1.policyid" === $"df2.policyid") && ($"df1.orig_non_key_md5" === $"df2.delta_non_key_md5"), lit("NCR")).when (($"df1.policyid".isNotNull) && ($"df2.delta_non_key_md5".isNull), lit("NCR")).when (($"df1.policyid" === $"df2.policyid") && ($"df1.orig_non_key_md5" =!= $"df2.delta_non_key_md5"), lit("U")).when (($"df1.policyid".isNull) && ($"df2.delta_non_key_md5".isNotNull), lit("I"))).drop($"df1.policyid")
+
+
+val resultDF = scd2_df.filter($"md5Flag" === "I" && $"md5Flag" === "U").withColumn("eff_start_date", current_timestamp()).withColumn("eff_end_date", lit("9999-01-01 00:00:00")).withColumn("curr_ind", lit("Y")).withColumn("md5_chk_sum",lit("MD1")).drop("md5Flag","orig_non_key_md5","delta_non_key_md5")
+
+resultDF.write.mode("append").partitionBy("eff_start_date").saveAsTable("db10.db_policy_hub")
+
+
+--scd2_df.groupBy($"md5Flag").count().show()
+
+--select policyid from pc_policyperiod_orig where policyid in (1098,1142,1304);
+
+--scd2_df.filter($"md5Flag"==="U").show;
