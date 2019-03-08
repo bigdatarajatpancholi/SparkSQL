@@ -1,0 +1,45 @@
+import org.apache.spark.sql.SparkSession
+/*
+run local jar command : spark2-submit --class HiveSparkPartitioning /home/dbuser10/sparkhivedynamicpartition_2.11-0.1.jar
+ */
+object HiveSparkPartitioning {
+
+    def main (args: Array[String]): Unit = {
+
+      val spark: SparkSession =
+        SparkSession
+          .builder()
+          .appName("Hive Spark Partitioning")
+          .master("local[*]")
+          .enableHiveSupport()
+          .config("hive.exec.dynamic.partition", "true")
+          .config("hive.exec.dynamic.partition.mode", "nonstrict")
+          .getOrCreate()
+
+      spark.conf.set("spark.sql.sources.partitionOverwriteMode","dynamic")
+      import spark.implicits._
+      val df_orig = spark.read
+        .option("header","true")
+        .option("inferSchema","true")
+        .csv("/user/dbuser10/HiveSpark/file/file1.csv")
+
+      val dist_year_orig_count = df_orig.select($"year").distinct().count().toInt
+
+      val df_orig_repart = df_orig.repartition(dist_year_orig_count).toDF
+
+      df_orig.write.mode("overwrite").partitionBy("year").saveAsTable("db10.employee")
+
+      val df_delta = spark.read
+        .option("header","true")
+        .option("inferSchema","true")
+        .csv("/user/dbuser10/HiveSpark/file/file2.csv")
+
+      val dist_year_delta_count = df_orig.select($"year").distinct().count().toInt
+
+      val df_delta_repart = df_delta.repartition(dist_year_delta_count).toDF
+
+      df_delta.write.mode("overwrite").insertInto("db10.employee")
+
+      spark.stop()
+    }
+}
