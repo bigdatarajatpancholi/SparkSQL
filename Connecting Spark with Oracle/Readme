@@ -1,0 +1,27 @@
+
+ipconfig
+ipv4 address for vmnet1
+telnet 192.168.153.1 1521
+
+Testing this in windows cmd
+
+open cmd ->
+
+cd c:\Spark\spark-2.3.3-bin-hadoop2.7
+
+.\bin\spark-shell --jars "F:\Hadoop\Oracle\ojdbc6_g.jar"
+
+
+val empDF = spark.read.format("jdbc").option("url", "jdbc:oracle:thin:india/india@//192.168.153.1:1521/xe").option("dbtable", "india.emp").option("user", "india").option("password", "india").option("driver", "oracle.jdbc.driver.OracleDriver").load()
+
+empDF.printSchema
+empDF.show(false)
+
+val deptDF = spark.read.format("jdbc").option("url", "jdbc:oracle:thin:india/india@//192.168.153.1:1521/xe").option("dbtable", "india.dept").option("user", "india").option("password", "india").option("driver", "oracle.jdbc.driver.OracleDriver").load()
+
+deptDF.printSchema
+deptDF.show(false)
+
+
+Note:- Need to add the jar file also in the external libraries when running in Intellij.
+
