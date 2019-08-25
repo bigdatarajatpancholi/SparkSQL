@@ -1,0 +1,38 @@
+
+
+
+  
+******csv*******
+
+def getFileNameFromPath(filePathWithName:String):String={
+    filePathWithName.split("\\/").last
+  }
+
+  def getFileNameFromPathUdf= udf(getFileNameFromPath _)
+
+val schemaDF = spark.read.format("csv").option("header","true").option("inferSchema","true").option("path","file:///home/bigdatacloudsolution2501/test/csv/file1.csv").load()
+
+val csv_schema = schemaDF.schema
+
+val df_csv = spark.read.format("csv").option("header","true").schema(csv_schema).option("path","file:///home/bigdatacloudsolution2501/test/csv/").load().select(input_file_name.alias("file_name"), $"*")
+
+val finalDF = df_csv.select($"id", $"first_name", $"last_name", $"email", $"gender", $"ip_address", getFileNameFromPathUdf($"file_name").alias("file_name"))
+
+finalDF.show()
+finalDF.printSchema()
+
+
+********json**********
+
+val schemaDF = spark.read.format("json").option("inferSchema", "true").option("path", "file:///home/bigdatacloudsolution2501/test/json_without_array/file1.json").load()
+
+val json_schema = schemaDF.schema
+
+val df_json = spark.read.format("json").option("header","true").schema(json_schema).option("path","file:///home/bigdatacloudsolution2501/test/json_without_array/").load().select(input_file_name.alias("file_name"), $"*")
+
+val finalDF = df_json.select($"id", $"first_name", $"last_name", $"email", $"gender", $"ip_address", getFileNameFromPathUdf($"file_name").alias("file_name"))
+
+finalDF.show()
+finalDF.printSchema()
+
+
